@@ -314,7 +314,7 @@ export function registerIntegration(gladys, deps = {}) {
     if (!isPrinterId(gladys, device.external_id)) {
       return;
     }
-    logger.info(`${device.name}: added to Gladys, reading it now`);
+    logger.info(`${device.name}: added or updated in Gladys, reading it now`);
     await poller.pollNow(device).catch(() => {});
     refreshWidget();
   };

@@ -1,61 +1,142 @@
-# Demo Devices Template
+# Samsung SyncThru
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+## Overview
 
-## What you get
+This integration follows your **Samsung printers** (Xpress, ProXpress, MultiXpress, CLP, CLX,
+SCX, ML… and the HP models of the former Samsung range that kept the same web interface) through
+their built-in **SyncThru** web service: the printer state, the level of each toner, the imaging
+units (drums), the paper trays and the page counter. Everything stays on your local network: no
+cloud, no account, no password.
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+It is **read only**: it never prints, never changes a setting of the printer, and offers nothing
+to switch on or off.
+
+It completes the **IPP Printers** integration, for the Samsung models whose IPP service does not
+report the supplies.
+
+> **Developed without the hardware: feedback welcome.** The integration was written and tested
+> against real SyncThru answers published by the pysyncthru and Home Assistant projects, not on a
+> printer. If something is missing or wrong on yours, open an issue on the GitHub repository with
+> the output of the **Test a printer** button.
+
+Not affiliated with Samsung or HP.
+
+## Requirements
+
+- Gladys Assistant 5.1 or later.
+- A Samsung printer connected to your network (Ethernet or Wi-Fi), whose **SyncThru** page opens
+  in a browser at `http://<printer address>/`. The integration reads
+  `http://<printer address>/sws/app/information/home/home.json`: if this address shows a page of
+  text in your browser, the printer is compatible.
+- Better: a fixed address for the printer (a DHCP reservation in your router). The integration
+  looks for a printer that moved, but a fixed address is more reliable.
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+1. Install the integration from the store (or **Integrations → Install from GitHub** with the
+   address of the repository).
+2. Open its **Configuration** tab:
+   - **Printers (manual list)**: optional. The IP addresses or hostnames of your printers,
+     separated by commas (`192.168.1.20, printer.local`). An `http://` or `https://` address with
+     a port works too. Fill it in when the printer is not found automatically.
+   - **Language of the names**: the language of the feature names (fixed when the printer is
+     added) and of the texts sent to Gladys (state, scene variables). French by default.
+   - **Refresh interval**: how often each printer is read, 60 seconds by default (30 to 3600).
+   - **Low supply threshold**: the level, in %, at which the **Supply running low** trigger fires
+     (10 % by default). It also colours the gauges of the widget.
+3. Save, open the **Discover** tab and add your printers to Gladys.
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+Printers that answer the network search (SSDP, the way Windows finds them) appear in the Discover
+tab without typing anything: Gladys sends the search and hands the answers to the integration,
+which only keeps the ones that really serve SyncThru.
 
-## Actions
+Network use: one small request per printer at each refresh interval, the page counters every
+15 minutes, and a network search at startup, when you open the Discover tab, and at most every
+30 minutes while a printer does not answer. Only the values that changed are sent to Gladys, and
+the stable ones again every 6 hours.
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+## Devices
 
-## Scenes
+One device per printer, named after its model and location (`Samsung C430W (Living room)`). Its
+features depend on what the printer reports:
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+| Feature                                       | Type                     | Value                                                                                                        |
+| --------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| State                                         | text                     | Ready, Printing, Sleeping, Warming up, Busy, Toner low, Warning, Paper jam, Out of paper, Error, Unreachable |
+| Online                                        | presence sensor (yes/no) | 1 when the printer answers, 0 otherwise                                                                      |
+| Black / Cyan / Magenta / Yellow toner         | level (%)                | the remaining toner of each cartridge                                                                        |
+| Black / … drum, Color drum                    | level (%)                | the remaining life of the imaging unit, when the printer reports it                                          |
+| Tray 1 … 5, Multi-purpose tray, Manual feeder | text                     | Ready, Empty, or Alert with the printer's code                                                               |
+| Tray paper                                    | level (%)                | only on the models that report a paper level                                                                 |
+| Pages printed, Pages copied                   | counter                  | the page counters, on the models that serve them                                                             |
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+When the printer does not answer, **State** becomes **Unreachable** and **Online** 0; the other
+values keep their last reading.
 
-## Dashboard
+The **State** comes from the status the printer reports and from its front panel text, in English,
+French, German or Spanish: a jam or an empty tray is recognized on the panel ("Paper Jam",
+"Bourrage", "Papierstau", "Atasco"…) and from the Samsung error codes (`M1-1110`, `M1-5112`).
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+## Widget
+
+The **Printer** widget shows one printer (the first one added if none is chosen in its settings):
+
+- up to five gauges, the toners first, then the drums, coloured against the threshold;
+- the state, the panel text, the trays, the page counter and the time of the last reading;
+- a **Refresh** button that reads the printer at once.
+
+## Scene triggers
+
+Two triggers, under the **Integrations** category of the scene editor:
+
+- **Supply running low**: a toner or a drum goes down to the threshold of the configuration. Filter
+  on a printer and on the kind of supply (toner, drum). Passes on the printer name, the supply
+  (`Black toner`) and its level.
+- **Paper jam or out of paper**: a printer reports a paper jam or has run out of paper. Filter on a
+  printer and on the problem. Passes on the printer name, the problem in words and the panel text.
+
+Each fires once, when the situation starts. It does not fire again after a restart of the
+integration or of Gladys for a situation already present.
+
+The levels are ordinary Gladys features too: the core trigger **Device state change** works on
+them, for one cartridge.
+
+## Configuration action
+
+**Test a printer**, in the Configuration tab: type an address, and the integration reads the
+printer at once and tells you what it found (model, state, levels), or why it got no answer.
+
+## Scene examples
+
+- **Order toner in time**: trigger _Supply running low_ (kind: toner) → action _Send a message_
+  with the **Printer**, **Supply** and **Level** variables (type `{{` in the message to insert
+  them): "Office printer: Black toner at 10 %".
+- **The printer is stuck**: trigger _Paper jam or out of paper_ → action _Send a message_ with the
+  problem and the panel text, to the person nearest to it.
+- **Printer forgotten on**: trigger _Device state change_ on **Online** at 1, condition _time is
+  after 10 pm_ → a reminder, or switching off the printer's smart plug.
 
 ## Troubleshooting
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+- **No printer in the Discover tab**: type its address in the manual list, then use **Test a
+  printer**. "No SyncThru JSON service" means the printer has no SyncThru JSON page: older models
+  only have HTML pages, not supported.
+- **"No answer"**: check the address, that the printer is on and not in deep sleep, and that it is
+  on the same network as Gladys. Some printers turn their network off in deep sleep.
+- **A printer whose serial number is hidden** (some firmwares show `xxxxxxxx`) is recognized by its
+  MAC address, or by its address: give it a fixed address.
+- **More details**: set the `LOG_LEVEL` environment variable of the integration to `debug`.
+
+## Limits
+
+- **Developed without the hardware**: the values were checked on published answers of the M2070,
+  C430W and C480FW, not on a live printer. The HP models are not verified.
+- The **paper format** of the trays is not shown: SyncThru gives a numeric code whose meaning is
+  not documented.
+- The **paper level** of a tray is read only on the models that report it, and assumed in %.
+- The jam and empty-tray detection relies on the panel text and the Samsung error codes: a panel
+  set to another language than the four above may only show **Warning** or **Error**.
+- Printers with only the old HTML SyncThru pages (no `home.json`) are not supported.
+- Read only: no printing, no setting, no remote reset.
+- The feature names are fixed when the printer is added: changing the language later changes the
+  state texts, not the names.

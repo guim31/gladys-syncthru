@@ -30,6 +30,18 @@ Gladys before reporting a problem.
 
 In scope: the code of this repository and the Docker image it publishes.
 
+What the integration handles:
+
+- **No secret.** SyncThru status pages need no login, and the integration asks for none: an
+  address typed with credentials (`http://user:password@…`) is refused, and masked in the logs.
+- **Nothing stored in `/data`.** The configuration (printer addresses, language, interval,
+  threshold) lives in Gladys; the last readings are kept in memory only.
+- **Network**: plain HTTP GETs, from the container to the printers of the local network, on the
+  two read-only SyncThru documents (`home.json`, `counters.json`). HTTPS is accepted for printers
+  that redirect to it, without checking their self-signed certificate (nothing secret is sent).
+  The SSDP search is sent by the Gladys core (mediated discovery), never by the container.
+- Nothing is ever written to a printer.
+
 Out of scope: Gladys Assistant itself (see its
-[security policy](https://github.com/GladysAssistant/Gladys/security/policy)),
-and the third-party services and devices the integration talks to.
+[security policy](https://github.com/GladysAssistant/Gladys/security/policy)), and the printers
+and their firmware.

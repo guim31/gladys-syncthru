@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-16
+
 ### Added
 
 - Samsung printers followed through their SyncThru web service, one device per printer: state
@@ -26,4 +28,5 @@ the notes of the version's GitHub Release.
 - _Test a printer_ action in the Configuration tab.
 - Every text in English, French, German and Spanish, with the documentation.
 
-[Unreleased]: https://github.com/guim31/gladys-syncthru/commits/main
+[Unreleased]: https://github.com/guim31/gladys-syncthru/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/guim31/gladys-syncthru/releases/tag/v1.0.1

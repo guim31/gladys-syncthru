@@ -1,6 +1,6 @@
 {
   "name": "gladys-syncthru",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Gladys Assistant external integration: Samsung printers (toner, drums, trays, state) over the SyncThru web service.",
   "type": "module",

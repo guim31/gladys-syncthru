@@ -8,8 +8,8 @@
     "de": "Toner, Trommeln, Papierfächer und Status von Samsung-Druckern über SyncThru. Lokal, ohne Cloud.",
     "es": "Tóner, tambores, bandejas y estado de las impresoras Samsung por SyncThru. Local, sin nube."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/guim31/gladys-syncthru:1.0.0",
+  "version": "1.0.1",
+  "docker_image": "ghcr.io/guim31/gladys-syncthru:1.0.1",
   "gladys_version": ">=5.1.0",
   "categories": ["appliances", "network"],
   "cover_image": "https://raw.githubusercontent.com/guim31/gladys-syncthru/main/cover.png",

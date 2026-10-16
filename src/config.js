@@ -1,45 +1,79 @@
 // -----------------------------------------------------------------------------
-// Integration configuration.
-//
-// The configuration is filled in by the user in Gladys, from the `config_schema`
-// declared in `gladys-assistant-integration.json`. The SDK fetches it for you
-// (`gladys.getConfig()`) and notifies you of every change through
-// `gladys.onConfigUpdated()`.
-//
-// This module only provides defaults and normalizes the received object, so the
-// rest of the code never has to deal with `undefined`.
+// Integration configuration, filled in by the user from the manifest
+// `config_schema`. DEFAULT_CONFIG mirrors the manifest defaults
+// (test/manifest.test.js checks it); normalizeConfig types and bounds what the
+// form sends, so the rest of the code never sees a string or an undefined.
 // -----------------------------------------------------------------------------
 
-// Defaults: they MUST stay consistent with the `default` values declared in the
-// `config_schema` of the manifest.
+import { DEFAULT_LANGUAGE, localeOf } from './i18n.js';
+import { normalizeAddress } from './syncthru/client.js';
+
 export const DEFAULT_CONFIG = {
-  latitude: 48.8566, // Paris
-  longitude: 2.3522,
-  unit: 'celsius', // 'celsius' | 'fahrenheit'
-  // Seconds between two reads of the polled sensors. Gladys polls at most once
-  // a minute: slower intervals are applied by skipping polls (see
-  // createPoller in src/devices/index.js).
-  poll_frequency: 300,
-  // Reserved key (NOT in config_schema): because the manifest declares both
-  // 'local' and 'cloud' in its `transports` field, Gladys shows a standard
-  // "Prefer the local connection" toggle and sends the user's choice here.
-  // Read-only for the integration; defaults to true.
-  GLADYS_PREFER_LOCAL: true,
+  printers: '',
+  language: DEFAULT_LANGUAGE,
+  poll_interval: 60,
+  low_threshold: 10,
 };
 
+export const POLL_INTERVAL_BOUNDS = [30, 3600];
+export const LOW_THRESHOLD_BOUNDS = [1, 50];
+
+function bounded(value, fallback, [min, max]) {
+  const number = Number(String(value ?? '').replace(',', '.'));
+  if (value === '' || value === null || value === undefined || !Number.isFinite(number)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+
 /**
- * Merge the user config with the defaults.
- * @param {Record<string, unknown>} raw config returned by the SDK
+ * The addresses typed by the user, normalized, without duplicates; the
+ * invalid ones apart (they are reported, never polled).
+ * @param {string} text comma, semicolon, space or line separated
  */
+export function parsePrinterList(text) {
+  const addresses = [];
+  const invalid = [];
+  for (const item of String(text ?? '').split(/[\s,;]+/)) {
+    if (!item) {
+      continue;
+    }
+    try {
+      const address = normalizeAddress(item);
+      if (!addresses.includes(address)) {
+        addresses.push(address);
+      }
+    } catch {
+      // Shown in the logs: never with the credentials someone typed in it.
+      invalid.push(item.replace(/\/\/[^/@]*@/, '//***@').slice(0, 60));
+    }
+  }
+  return { addresses, invalid };
+}
+
+/** @param {Record<string, unknown>} [raw] the config returned by the SDK */
 export function normalizeConfig(raw = {}) {
+  const source = raw ?? {};
+  const { addresses, invalid } = parsePrinterList(source.printers);
   return {
-    ...DEFAULT_CONFIG,
-    ...raw,
-    // Force the types: config may arrive as strings from a form.
-    latitude: Number(raw.latitude ?? DEFAULT_CONFIG.latitude),
-    longitude: Number(raw.longitude ?? DEFAULT_CONFIG.longitude),
-    poll_frequency: Number(raw.poll_frequency ?? DEFAULT_CONFIG.poll_frequency),
-    // The preference is a boolean; anything but an explicit false means true.
-    GLADYS_PREFER_LOCAL: raw.GLADYS_PREFER_LOCAL !== false,
+    printers: typeof source.printers === 'string' ? source.printers : DEFAULT_CONFIG.printers,
+    addresses,
+    invalidAddresses: invalid,
+    language: localeOf(source.language, DEFAULT_CONFIG.language),
+    poll_interval: bounded(
+      source.poll_interval,
+      DEFAULT_CONFIG.poll_interval,
+      POLL_INTERVAL_BOUNDS,
+    ),
+    low_threshold: bounded(
+      source.low_threshold,
+      DEFAULT_CONFIG.low_threshold,
+      LOW_THRESHOLD_BOUNDS,
+    ),
   };
+}
+
+/** Polling period, in ms. */
+export function pollIntervalMs(config) {
+  return config.poll_interval * 1000;
 }

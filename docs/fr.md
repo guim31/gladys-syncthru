@@ -1,67 +1,152 @@
-# Template de démonstration
+# Samsung SyncThru
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+## Présentation
 
-## Ce que vous obtenez
+Cette intégration suit vos **imprimantes Samsung** (Xpress, ProXpress, MultiXpress, CLP, CLX,
+SCX, ML… et les modèles HP de l'ancienne gamme Samsung qui ont gardé la même interface web) par
+leur service web intégré **SyncThru** : l'état de l'imprimante, le niveau de chaque toner, les
+unités d'imagerie (tambours), les bacs à papier et le compteur de pages. Tout reste sur votre
+réseau local : ni cloud, ni compte, ni mot de passe.
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+Elle est en **lecture seule** : elle n'imprime rien, ne change aucun réglage de l'imprimante et ne
+propose rien à allumer ou éteindre.
+
+Elle complète l'intégration **IPP Printers**, pour les modèles Samsung dont le service IPP ne
+remonte pas les consommables.
+
+> **Développée sans le matériel : vos retours sont les bienvenus.** L'intégration a été écrite et
+> testée sur de vraies réponses SyncThru publiées par les projets pysyncthru et Home Assistant, pas
+> sur une imprimante. S'il manque quelque chose ou si une valeur est fausse chez vous, ouvrez une
+> issue sur le dépôt GitHub avec le résultat du bouton **Tester une imprimante**.
+
+Sans lien avec Samsung ni HP.
+
+## Prérequis
+
+- Gladys Assistant 5.1 ou plus récent.
+- Une imprimante Samsung reliée à votre réseau (Ethernet ou Wi-Fi), dont la page **SyncThru**
+  s'ouvre dans un navigateur à l'adresse `http://<adresse de l'imprimante>/`. L'intégration lit
+  `http://<adresse de l'imprimante>/sws/app/information/home/home.json` : si cette adresse affiche
+  une page de texte dans votre navigateur, l'imprimante est compatible.
+- Mieux : une adresse fixe pour l'imprimante (une réservation DHCP dans votre box). L'intégration
+  recherche une imprimante qui a changé d'adresse, mais une adresse fixe est plus fiable.
 
 ## Configuration
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+1. Installez l'intégration depuis le store (ou **Intégrations → Installer depuis GitHub** avec
+   l'adresse du dépôt).
+2. Ouvrez son onglet **Configuration** :
+   - **Imprimantes (liste manuelle)** : optionnel. Les adresses IP ou noms d'hôte de vos
+     imprimantes, séparés par des virgules (`192.168.1.20, imprimante.local`). Une adresse
+     `http://` ou `https://` avec un port convient aussi. À remplir quand l'imprimante n'est pas
+     trouvée automatiquement.
+   - **Langue des noms** : la langue des noms de fonctionnalités (fixés à l'ajout de l'imprimante)
+     et des textes envoyés à Gladys (état, variables de scène). Français par défaut.
+   - **Intervalle de lecture** : la fréquence de lecture de chaque imprimante, 60 secondes par
+     défaut (30 à 3600).
+   - **Seuil de consommable bas** : le niveau, en %, auquel se déclenche **Consommable bientôt
+     vide** (10 % par défaut). Il colore aussi les jauges du widget.
+3. Enregistrez, ouvrez l'onglet **Découverte** et ajoutez vos imprimantes à Gladys.
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+Les imprimantes qui répondent à la recherche réseau (SSDP, comme Windows les trouve) apparaissent
+dans l'onglet Découverte sans rien saisir : Gladys envoie la recherche et transmet les réponses à
+l'intégration, qui ne garde que celles qui servent vraiment SyncThru.
 
-## Actions
+Trafic réseau : une petite requête par imprimante à chaque intervalle de lecture, les compteurs de
+pages toutes les 15 minutes, et une recherche réseau au démarrage, à l'ouverture de l'onglet
+Découverte, et au plus toutes les 30 minutes tant qu'une imprimante ne répond pas. Seules les
+valeurs qui changent sont envoyées à Gladys, et les valeurs stables de nouveau toutes les 6 heures.
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+## Appareils
 
-## Scènes
+Un appareil par imprimante, nommé d'après son modèle et son emplacement
+(`Samsung C430W (Salon)`). Ses fonctionnalités dépendent de ce que l'imprimante annonce :
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+| Fonctionnalité                                      | Type                          | Valeur                                                                                                                                       |
+| --------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| État                                                | texte                         | Prête, Impression en cours, En veille, Préchauffage, Occupée, Toner bas, Avertissement, Bourrage papier, Plus de papier, Erreur, Injoignable |
+| En ligne                                            | capteur de présence (oui/non) | 1 quand l'imprimante répond, 0 sinon                                                                                                         |
+| Toner noir / cyan / magenta / jaune                 | niveau (%)                    | le toner restant de chaque cartouche                                                                                                         |
+| Tambour noir / …, Tambour couleur                   | niveau (%)                    | la durée de vie restante de l'unité d'imagerie, quand l'imprimante l'annonce                                                                 |
+| Bac 1 … 5, Bac multifonction, Alimentation manuelle | texte                         | Prêt, Vide, ou Alerte avec le code de l'imprimante                                                                                           |
+| Papier bac                                          | niveau (%)                    | seulement sur les modèles qui annoncent un niveau de papier                                                                                  |
+| Pages imprimées, Pages copiées                      | compteur                      | les compteurs de pages, sur les modèles qui les servent                                                                                      |
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+Quand l'imprimante ne répond pas, **État** passe à **Injoignable** et **En ligne** à 0 ; les autres
+valeurs gardent leur dernier relevé.
 
-## Tableau de bord
+L'**État** vient du statut annoncé par l'imprimante et du texte de son panneau de commande, en
+anglais, français, allemand ou espagnol : un bourrage ou un bac vide est reconnu sur le panneau
+(« Paper Jam », « Bourrage », « Papierstau », « Atasco »…) et par les codes d'erreur Samsung
+(`M1-1110`, `M1-5112`).
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+## Widget
+
+Le widget **Imprimante** affiche une imprimante (la première ajoutée si aucune n'est choisie dans
+ses réglages) :
+
+- jusqu'à cinq jauges, les toners d'abord, puis les tambours, colorées selon le seuil ;
+- l'état, le texte du panneau, les bacs, le compteur de pages et l'heure du dernier relevé ;
+- un bouton **Actualiser** qui relit l'imprimante tout de suite.
+
+## Déclencheurs de scène
+
+Deux déclencheurs, dans la catégorie **Intégrations** de l'éditeur de scènes :
+
+- **Consommable bientôt vide** : un toner ou un tambour descend au seuil de la configuration. Filtre
+  sur une imprimante et sur le type de consommable (toner, tambour). Transmet le nom de
+  l'imprimante, le consommable (`Toner noir`) et son niveau.
+- **Bourrage ou plus de papier** : une imprimante signale un bourrage papier ou n'a plus de papier.
+  Filtre sur une imprimante et sur le problème. Transmet le nom de l'imprimante, le problème en
+  toutes lettres et le texte du panneau.
+
+Chacun se déclenche une fois, quand la situation commence. Il ne se redéclenche pas après un
+redémarrage de l'intégration ou de Gladys pour une situation déjà présente.
+
+Les niveaux sont aussi des fonctionnalités Gladys ordinaires : le déclencheur du cœur
+**Changement d'état de l'appareil** marche dessus, pour une cartouche.
+
+## Action de configuration
+
+**Tester une imprimante**, dans l'onglet Configuration : saisissez une adresse, l'intégration lit
+l'imprimante tout de suite et vous dit ce qu'elle a trouvé (modèle, état, niveaux), ou pourquoi
+elle n'a pas eu de réponse.
+
+## Exemples de scènes
+
+- **Commander le toner à temps** : déclencheur _Consommable bientôt vide_ (type : toner) → action
+  _Envoyer un message_ avec les variables **Imprimante**, **Consommable** et **Niveau (%)** (tapez
+  `{{` dans le message pour les insérer) : « Imprimante du bureau : Toner noir à 10 % ».
+- **L'imprimante est bloquée** : déclencheur _Bourrage ou plus de papier_ → action _Envoyer un
+  message_ avec le problème et le texte du panneau, à la personne la plus proche.
+- **Imprimante oubliée allumée** : déclencheur _Changement d'état de l'appareil_ sur **En ligne**
+  à 1, condition _après 22 h_ → un rappel, ou l'extinction de la prise connectée de l'imprimante.
 
 ## Dépannage
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- **Aucune imprimante dans l'onglet Découverte** : saisissez son adresse dans la liste manuelle,
+  puis utilisez **Tester une imprimante**. « Pas de service JSON SyncThru » signifie que
+  l'imprimante n'a pas de page JSON SyncThru : les modèles anciens n'ont que des pages HTML, non
+  prises en charge.
+- **« Aucune réponse »** : vérifiez l'adresse, que l'imprimante est allumée et pas en veille
+  profonde, et qu'elle est sur le même réseau que Gladys. Certaines imprimantes coupent leur réseau
+  en veille profonde.
+- **Une imprimante dont le numéro de série est masqué** (certains firmwares affichent
+  `xxxxxxxx`) est reconnue par son adresse MAC, ou par son adresse : donnez-lui une adresse fixe.
+- **Plus de détails** : passez la variable d'environnement `LOG_LEVEL` de l'intégration à `debug`.
+
+## Limites
+
+- **Développée sans le matériel** : les valeurs ont été vérifiées sur des réponses publiées des
+  M2070, C430W et C480FW, pas sur une imprimante réelle. Les modèles HP ne sont pas vérifiés.
+- Le **format de papier** des bacs n'est pas affiché : SyncThru donne un code numérique dont le
+  sens n'est pas documenté.
+- Le **niveau de papier** d'un bac n'est lu que sur les modèles qui l'annoncent, et supposé en %.
+- La détection du bourrage et du bac vide repose sur le texte du panneau et les codes d'erreur
+  Samsung : un panneau réglé dans une autre langue que les quatre ci-dessus peut n'afficher
+  qu'**Avertissement** ou **Erreur**.
+- Les imprimantes qui n'ont que les anciennes pages HTML de SyncThru (pas de `home.json`) ne sont
+  pas prises en charge.
+- Lecture seule : pas d'impression, pas de réglage, pas de réinitialisation à distance.
+- Les noms des fonctionnalités sont fixés à l'ajout de l'imprimante : changer la langue ensuite
+  change les textes d'état, pas les noms.

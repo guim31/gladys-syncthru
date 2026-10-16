@@ -1,101 +1,188 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Samsung SyncThru",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Toner, drums, paper trays and state of Samsung printers over SyncThru. Local, no cloud.",
+    "fr": "Toner, tambours, bacs et état des imprimantes Samsung via SyncThru. Local, sans cloud.",
+    "de": "Toner, Trommeln, Papierfächer und Status von Samsung-Druckern über SyncThru. Lokal, ohne Cloud.",
+    "es": "Tóner, tambores, bandejas y estado de las impresoras Samsung por SyncThru. Local, sin nube."
   },
   "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "docker_image": "ghcr.io/guim31/gladys-syncthru:1.0.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "categories": ["appliances", "network"],
+  "cover_image": "https://raw.githubusercontent.com/guim31/gladys-syncthru/main/cover.png",
+  "transports": ["local"],
+  "network_discovery": [
+    {
+      "type": "ssdp",
+      "st": "urn:schemas-upnp-org:device:Printer:1"
+    }
+  ],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
-      "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+      "label": {
+        "en": "How it works",
+        "fr": "Fonctionnement",
+        "de": "Funktionsweise",
+        "es": "Funcionamiento"
       },
-      "links": [
+      "description": {
+        "en": "Samsung printers (and the HP models of the former Samsung range) that answer SSDP on your network are found by the Discover tab. Printers that do not announce themselves can be listed below. The integration only reads the SyncThru web page of the printer: it never prints, never changes a setting, and needs no password.",
+        "fr": "Les imprimantes Samsung (et les modèles HP de l'ancienne gamme Samsung) qui répondent en SSDP sur votre réseau sont trouvées par l'onglet Découverte. Celles qui ne s'annoncent pas peuvent être listées ci-dessous. L'intégration ne fait que lire la page web SyncThru de l'imprimante : elle n'imprime rien, ne change aucun réglage et ne demande aucun mot de passe.",
+        "de": "Samsung-Drucker (und die HP-Modelle der früheren Samsung-Reihe), die in deinem Netzwerk auf SSDP antworten, findet der Tab „Entdecken“. Drucker, die sich nicht melden, kannst du unten eintragen. Die Integration liest nur die SyncThru-Webseite des Druckers: Es wird nichts gedruckt, keine Einstellung geändert und kein Passwort gebraucht.",
+        "es": "Las impresoras Samsung (y los modelos HP de la antigua gama Samsung) que responden por SSDP en su red aparecen en la pestaña Descubrir. Las que no se anuncian pueden indicarse a continuación. La integración solo lee la página web SyncThru de la impresora: no imprime nada, no cambia ningún ajuste y no necesita contraseña."
+      }
+    },
+    {
+      "key": "printers",
+      "type": "string",
+      "label": {
+        "en": "Printers (manual list)",
+        "fr": "Imprimantes (liste manuelle)",
+        "de": "Drucker (manuelle Liste)",
+        "es": "Impresoras (lista manual)"
+      },
+      "description": {
+        "en": "Optional. IP addresses or hostnames of the printers, separated by commas. An http:// or https:// URL works too, with a port if needed.",
+        "fr": "Optionnel. Adresses IP ou noms d'hôte des imprimantes, séparés par des virgules. Une URL http:// ou https:// convient aussi, avec un port si besoin.",
+        "de": "Optional. IP-Adressen oder Hostnamen der Drucker, durch Kommas getrennt. Eine http://- oder https://-URL geht auch, bei Bedarf mit Port.",
+        "es": "Opcional. Direcciones IP o nombres de host de las impresoras, separados por comas. También sirve una URL http:// o https://, con puerto si hace falta."
+      },
+      "placeholder": {
+        "en": "e.g. 192.168.1.20, printer.local",
+        "fr": "ex. 192.168.1.20, imprimante.local",
+        "de": "z. B. 192.168.1.20, drucker.local",
+        "es": "p. ej. 192.168.1.20, impresora.local"
+      },
+      "required": false
+    },
+    {
+      "key": "language",
+      "type": "select",
+      "label": {
+        "en": "Language of the names",
+        "fr": "Langue des noms",
+        "de": "Sprache der Namen",
+        "es": "Idioma de los nombres"
+      },
+      "description": {
+        "en": "Language of the feature names (fixed when a printer is added) and of the texts the integration sends: states, scene variables.",
+        "fr": "Langue des noms de fonctionnalités (fixés à l'ajout d'une imprimante) et des textes envoyés par l'intégration : états, variables de scène.",
+        "de": "Sprache der Funktionsnamen (beim Hinzufügen eines Druckers festgelegt) und der Texte der Integration: Status, Szenenvariablen.",
+        "es": "Idioma de los nombres de las funciones (fijados al añadir una impresora) y de los textos que envía la integración: estados, variables de escena."
+      },
+      "required": false,
+      "default": "fr",
+      "options": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français",
+            "de": "Französisch",
+            "es": "Francés"
+          }
+        },
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais",
+            "de": "Englisch",
+            "es": "Inglés"
+          }
+        },
+        {
+          "value": "de",
+          "label": {
+            "en": "German",
+            "fr": "Allemand",
+            "de": "Deutsch",
+            "es": "Alemán"
+          }
+        },
+        {
+          "value": "es",
+          "label": {
+            "en": "Spanish",
+            "fr": "Espagnol",
+            "de": "Spanisch",
+            "es": "Español"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
+      "key": "poll_interval",
       "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "label": {
+        "en": "Refresh interval (s)",
+        "fr": "Intervalle de lecture (s)",
+        "de": "Abfrageintervall (s)",
+        "es": "Intervalo de lectura (s)"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
-    },
-    {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
       "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
-      "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
-      "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
-      "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "How often each printer is read, in seconds (30 to 3600). One small request each time; only the changes are sent to Gladys.",
+        "fr": "Fréquence de lecture de chaque imprimante, en secondes (30 à 3600). Une petite requête à chaque fois ; seuls les changements sont envoyés à Gladys.",
+        "de": "Wie oft jeder Drucker gelesen wird, in Sekunden (30 bis 3600). Jedes Mal eine kleine Anfrage; nur Änderungen gehen an Gladys.",
+        "es": "Frecuencia de lectura de cada impresora, en segundos (30 a 3600). Una pequeña solicitud cada vez; solo los cambios se envían a Gladys."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
+      "default": 60,
+      "min": 30,
       "max": 3600
+    },
+    {
+      "key": "low_threshold",
+      "type": "number",
+      "label": {
+        "en": "Low supply threshold (%)",
+        "fr": "Seuil de consommable bas (%)",
+        "de": "Schwelle für niedrigen Füllstand (%)",
+        "es": "Umbral de consumible bajo (%)"
+      },
+      "description": {
+        "en": "The \"Supply running low\" scene trigger fires when a toner or a drum goes down to this level. Also colours the widget gauges.",
+        "fr": "Le déclencheur de scène « Consommable bientôt vide » se déclenche quand un toner ou un tambour descend à ce niveau. Colore aussi les jauges du widget.",
+        "de": "Der Szenenauslöser „Verbrauchsmaterial fast leer“ löst aus, wenn ein Toner oder eine Trommel auf diesen Wert sinkt. Färbt auch die Anzeigen des Widgets.",
+        "es": "El disparador de escena «Consumible casi agotado» se activa cuando un tóner o un tambor baja a este nivel. También colorea los indicadores del widget."
+      },
+      "required": false,
+      "default": 10,
+      "min": 1,
+      "max": 50
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
+      "key": "test_printer",
+      "label": {
+        "en": "Test a printer",
+        "fr": "Tester une imprimante",
+        "de": "Drucker testen",
+        "es": "Probar una impresora"
+      },
+      "timeout_seconds": 30,
       "fields": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "key": "address",
+          "type": "string",
+          "label": {
+            "en": "IP address or hostname",
+            "fr": "Adresse IP ou nom d'hôte",
+            "de": "IP-Adresse oder Hostname",
+            "es": "Dirección IP o nombre de host"
+          },
+          "placeholder": {
+            "en": "e.g. 192.168.1.20",
+            "fr": "ex. 192.168.1.20",
+            "de": "z. B. 192.168.1.20",
+            "es": "p. ej. 192.168.1.20"
+          },
           "required": true
         }
       ]
@@ -103,75 +190,223 @@
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "supply_low",
+      "label": {
+        "en": "Supply running low",
+        "fr": "Consommable bientôt vide",
+        "de": "Verbrauchsmaterial fast leer",
+        "es": "Consumible casi agotado"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "A toner or a drum of a printer goes down to the threshold set in the configuration.",
+        "fr": "Un toner ou un tambour d'une imprimante descend au seuil réglé dans la configuration.",
+        "de": "Ein Toner oder eine Trommel eines Druckers sinkt auf die in der Konfiguration eingestellte Schwelle.",
+        "es": "Un tóner o un tambor de una impresora baja al umbral ajustado en la configuración."
       },
       "fields": [
         {
-          "key": "device",
+          "key": "printer",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "label": {
+            "en": "Printer",
+            "fr": "Imprimante",
+            "de": "Drucker",
+            "es": "Impresora"
+          }
         },
         {
-          "key": "target",
+          "key": "kind",
           "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "label": {
+            "en": "Supply",
+            "fr": "Consommable",
+            "de": "Verbrauchsmaterial",
+            "es": "Consumible"
+          },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            {
+              "value": "toner",
+              "label": {
+                "en": "Toner",
+                "fr": "Toner",
+                "de": "Toner",
+                "es": "Tóner"
+              }
+            },
+            {
+              "value": "drum",
+              "label": {
+                "en": "Drum",
+                "fr": "Tambour",
+                "de": "Trommel",
+                "es": "Tambor"
+              }
+            }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "printer_name",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Printer",
+            "fr": "Imprimante",
+            "de": "Drucker",
+            "es": "Impresora"
+          }
+        },
+        {
+          "key": "supply",
+          "type": "string",
+          "label": {
+            "en": "Supply",
+            "fr": "Consommable",
+            "de": "Verbrauchsmaterial",
+            "es": "Consumible"
+          }
+        },
+        {
+          "key": "level",
+          "type": "number",
+          "label": {
+            "en": "Level (%)",
+            "fr": "Niveau (%)",
+            "de": "Füllstand (%)",
+            "es": "Nivel (%)"
+          }
         }
       ]
-    }
-  ],
-  "scene_actions": [
+    },
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "paper_problem",
+      "label": {
+        "en": "Paper jam or out of paper",
+        "fr": "Bourrage ou plus de papier",
+        "de": "Papierstau oder kein Papier",
+        "es": "Atasco o sin papel"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "A printer reports a paper jam, or has run out of paper.",
+        "fr": "Une imprimante signale un bourrage papier, ou n'a plus de papier.",
+        "de": "Ein Drucker meldet einen Papierstau oder hat kein Papier mehr.",
+        "es": "Una impresora indica un atasco de papel, o se ha quedado sin papel."
+      },
       "fields": [
         {
-          "key": "device",
+          "key": "printer",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
+          "label": {
+            "en": "Printer",
+            "fr": "Imprimante",
+            "de": "Drucker",
+            "es": "Impresora"
+          }
+        },
+        {
+          "key": "problem",
+          "type": "multi_select",
+          "label": {
+            "en": "Problem",
+            "fr": "Problème",
+            "de": "Problem",
+            "es": "Problema"
+          },
+          "options": [
+            {
+              "value": "jam",
+              "label": {
+                "en": "Paper jam",
+                "fr": "Bourrage papier",
+                "de": "Papierstau",
+                "es": "Atasco de papel"
+              }
+            },
+            {
+              "value": "out_of_paper",
+              "label": {
+                "en": "Out of paper",
+                "fr": "Plus de papier",
+                "de": "Kein Papier",
+                "es": "Sin papel"
+              }
+            }
+          ]
         }
       ],
-      "outputs": [
+      "variables": [
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "printer_name",
+          "type": "string",
+          "label": {
+            "en": "Printer",
+            "fr": "Imprimante",
+            "de": "Drucker",
+            "es": "Impresora"
+          }
+        },
+        {
+          "key": "problem_label",
+          "type": "string",
+          "label": {
+            "en": "Problem",
+            "fr": "Problème",
+            "de": "Problem",
+            "es": "Problema"
+          }
+        },
+        {
+          "key": "display_text",
+          "type": "string",
+          "label": {
+            "en": "Printer display",
+            "fr": "Afficheur de l'imprimante",
+            "de": "Druckeranzeige",
+            "es": "Pantalla de la impresora"
+          }
         }
       ]
     }
   ],
   "widgets": [
     {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
+      "key": "printer",
+      "label": {
+        "en": "Printer",
+        "fr": "Imprimante",
+        "de": "Drucker",
+        "es": "Impresora"
       },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+      "description": {
+        "en": "Toner and drum gauges, state, trays and page count of one printer.",
+        "fr": "Jauges de toner et de tambour, état, bacs et compteur de pages d'une imprimante.",
+        "de": "Toner- und Trommelanzeigen, Status, Fächer und Seitenzähler eines Druckers.",
+        "es": "Indicadores de tóner y tambor, estado, bandejas y contador de páginas de una impresora."
+      },
+      "icon": "printer",
+      "settings": [
+        {
+          "key": "printer",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Printer",
+            "fr": "Imprimante",
+            "de": "Drucker",
+            "es": "Impresora"
+          },
+          "description": {
+            "en": "Leave empty to show the first printer added to Gladys.",
+            "fr": "Laissez vide pour afficher la première imprimante ajoutée à Gladys.",
+            "de": "Leer lassen, um den ersten zu Gladys hinzugefügten Drucker anzuzeigen.",
+            "es": "Déjelo vacío para mostrar la primera impresora añadida a Gladys."
+          },
+          "required": false
+        }
+      ],
+      "action_timeout_seconds": 30
     }
   ]
 }

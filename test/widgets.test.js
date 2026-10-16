@@ -1,77 +1,99 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateWidgetContent } from '@gladysassistant/integration-sdk';
-import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { buildDiscoveredDevices } from '../src/devices/index.js';
-import { simulateLanSession } from '../src/devices/plug.js';
-import { DEMO_STATUS_WIDGET, WIDGETS, refreshWidgets } from '../src/widgets.js';
-import { normalizeConfig } from '../src/config.js';
+import { MAX_GAUGES, buildPrinterContent, levelColor, splitSupplies } from '../src/widgets.js';
+import { classifyState, readPrinter } from '../src/printer.js';
+import { home } from './helpers/printers.js';
 
-const gladys = createFakeGladys();
-const config = normalizeConfig();
-const demoStatus = WIDGETS[DEMO_STATUS_WIDGET];
+const ID = 'ext:test:printer:x';
+const ids = { feature: (key) => `${ID}:${key}` };
 
-// What the SDK passes to onWidgetGet, plus the config index.js adds.
-const getContent = (cfg = config) =>
-  demoStatus.get(gladys, { settings: {}, language: 'en', units: 'metric', config: cfg });
-
-test('the demo_status content is rendered exactly as sent', async () => {
-  // [] = nothing the core would drop, truncate or trim to the content budget.
-  assert.deepEqual(validateWidgetContent(await getContent()), []);
-});
-
-test('the degraded plug connection content is valid too', async () => {
-  simulateLanSession(false);
-  try {
-    const content = await getContent();
-    assert.deepEqual(validateWidgetContent(content), []);
-    const status = content.components.find((component) => component.type === 'status');
-    assert.ok(
-      status.items.some((item) => item.color === 'warning'),
-      'degraded shows a warning',
-    );
-  } finally {
-    simulateLanSession(true);
+function full() {
+  const doc = home('c430w');
+  for (const color of ['black', 'cyan', 'magenta', 'yellow']) {
+    doc[`drum_${color}`].opt = 1;
   }
-});
+  for (const tray of ['tray2', 'tray3', 'tray4', 'tray5', 'mp', 'manual']) {
+    doc[tray].opt = 1;
+  }
+  return readPrinter(doc, { GXI_BILLING_PRINT_TOTAL_IMP_CNT: 10 });
+}
 
-test('the live tiles reference features the integration publishes', async () => {
-  const featureIds = new Set(
-    buildDiscoveredDevices(gladys, config).flatMap((device) =>
-      device.features.map((feature) => feature.external_id),
-    ),
+test('the toners come first, five gauges at most, the rest in the rows', () => {
+  const { gauges, rest } = splitSupplies(full().supplies);
+  assert.deepEqual(
+    gauges.map((supply) => supply.key),
+    ['toner_black', 'toner_cyan', 'toner_magenta', 'toner_yellow', 'drum_black'],
   );
-  const liveTiles = (await getContent()).components.filter((c) => c.device_feature);
-  assert.ok(liveTiles.length > 0, 'the template demonstrates a device-bound tile');
-  for (const tile of liveTiles) {
-    assert.ok(featureIds.has(tile.device_feature), `unknown feature ${tile.device_feature}`);
-  }
+  assert.equal(gauges.length, MAX_GAUGES);
+  assert.deepEqual(
+    rest.map((supply) => supply.key),
+    ['drum_cyan', 'drum_magenta', 'drum_yellow', 'drum_color'],
+  );
 });
 
-test('every button action of the content is handled and answers a short toast', async () => {
-  const buttons = (await getContent()).components.filter((c) => c.type === 'button' && c.action);
-  assert.ok(buttons.length > 0, 'the template demonstrates a widget action');
-  for (const { action } of buttons) {
-    const message = await demoStatus.action(gladys, {
-      actionKey: action.key,
-      params: action.params ?? {},
-      settings: {},
-      config,
+test('a full printer stays within the budget of the core, in every language', () => {
+  const printer = full();
+  const device = { name: 'A printer with a name far too long for a widget heading', features: [] };
+  for (const language of ['en', 'fr', 'de', 'es', 'it']) {
+    const content = buildPrinterContent({
+      device,
+      ids,
+      snapshot: {
+        printer,
+        state: classifyState(printer),
+        readAt: Date.parse('2026-10-16T08:00:00Z'),
+      },
+      language,
+      lowThreshold: 10,
+      timeZone: 'Europe/Paris',
     });
-    assert.ok(message.en, 'the toast carries at least the mandatory `en` text');
-    assert.ok(message.en.length <= 200, 'toasts are capped at 200 characters');
+    assert.deepEqual(validateWidgetContent(content), [], language);
+    assert.equal(content.components.length, 8);
+    const rows = content.components.find((component) => component.type === 'status').items;
+    assert.equal(rows.length, 10);
+    assert.match(String(rows[rows.length - 1].value), /16\/10|10\/16|16\.10/);
+    for (const component of content.components) {
+      assert.notEqual(component.style, 'primary', 'invisible in dark mode (#3153)');
+      assert.notEqual(component.color, 'primary');
+    }
   }
 });
 
-test('an unknown widget action fails, so the user sees the error', async () => {
-  await assert.rejects(
-    demoStatus.action(gladys, { actionKey: 'unknown', params: {}, settings: {}, config }),
-    /Unknown widget action/,
+test('an unreachable printer keeps its last levels, without the stale panel text', () => {
+  const printer = readPrinter(home('m2070'));
+  const content = buildPrinterContent({
+    device: { name: 'M2070', features: [{ external_id: `${ID}:toner_black` }] },
+    ids,
+    snapshot: { printer, state: 'offline', readAt: null },
+    language: 'fr',
+    lowThreshold: 10,
+  });
+  assert.deepEqual(validateWidgetContent(content), []);
+  const rows = content.components.find((component) => component.type === 'status').items;
+  assert.deepEqual(rows[0], { label: 'État', value: 'Injoignable', color: 'neutral' });
+  assert.ok(!rows.some((row) => row.label === 'Afficheur'));
+  assert.equal(rows[rows.length - 1].value, 'Pas encore lu');
+  assert.equal(content.components[1].device_feature, `${ID}:toner_black`);
+});
+
+test('never read: a heading, the state unknown, the button', () => {
+  const content = buildPrinterContent({
+    device: { name: 'X' },
+    ids,
+    snapshot: null,
+    language: 'es',
+    lowThreshold: 10,
+  });
+  assert.deepEqual(validateWidgetContent(content), []);
+  assert.deepEqual(
+    content.components.map((component) => component.type),
+    ['text', 'status', 'button'],
   );
 });
 
-test('refreshWidgets nudges every widget', () => {
-  const fresh = createFakeGladys();
-  refreshWidgets(fresh);
-  assert.deepEqual(fresh.fake.widgetRefreshes, Object.keys(WIDGETS));
+test('the level colours follow the threshold', () => {
+  assert.equal(levelColor(10, 10), 'danger');
+  assert.equal(levelColor(20, 10), 'warning');
+  assert.equal(levelColor(21, 10), 'success');
 });

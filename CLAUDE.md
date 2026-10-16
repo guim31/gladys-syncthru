@@ -11,13 +11,19 @@ Gladys through
 [`@gladysassistant/integration-sdk`](https://github.com/GladysAssistant/integration-sdk-js),
 its only runtime dependency. It started from the official JavaScript template.
 
+This one follows **Samsung printers through their SyncThru web service**
+(read only): state, toners, drums, trays, page counters. See « Intégration
+SyncThru » at the end for the protocol and the pitfalls.
+
 ## Commands
 
 ```bash
 npm install
 npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
-node --test --test-name-pattern "plug"    # tests whose name matches
+node --test test/app.test.js              # one file
+node --test --test-name-pattern "jam"     # tests whose name matches
+node scripts/probe.mjs <address> [--raw]  # read-only probe of a real printer
+node scripts/probe.mjs --ssdp             # who answers the printer M-SEARCH
 npm run lint                              # ESLint
 npm run format:check                      # Prettier, as the CI runs it
 npm run format                            # Prettier, fix in place
@@ -31,16 +37,24 @@ pushing.
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
+index.js                          SDK wiring only: registerIntegration() then connect()
+src/app.js                        every handler: discovery, polling, states, triggers, widget, action
+src/poller.js                     the container's own polling timer (Gladys#3198), onPoll as fallback
+src/syncthru/parse.js             reader of the SyncThru JS-object-literal "JSON"
+src/syncthru/client.js            read-only HTTP client (home.json, counters.json), address rules
+src/printer.js                    a document in plain terms: supplies, trays, counters, state
+src/devices.js                    one Gladys device per printer: features, states
+src/triggers.js                   scene events on transitions (supply_low, paper_problem)
+src/widgets.js                    the `printer` widget content (pure builder)
+src/discovery.js                  SSDP answers -> candidate addresses
+src/i18n.js                       every text in en/fr/de/es, feature names, messages
+src/issues.js                     repeated failures logged once
 src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
+scripts/probe.mjs                 read-only probe for a real printer, identity masked
 gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
+docs/{en,fr,de,es}.md             user documentation, re-hosted by Gladys (same sections)
+test/                             node --test, against the SDK's fake Gladys + a fake SyncThru server
+test/fixtures/syncthru/           real printer answers (pysyncthru, Home Assistant), anonymized
 .github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
 ```
 
@@ -70,8 +84,10 @@ test/                             node --test, against the SDK's fake Gladys (in
   `type: "provider"`: 5.1.0). `test/manifest.test.js` ties the manifest to the
   code (defaults, action, scene and widget handlers): change both sides
   together.
-- **User-facing text** is bilingual (English and French): action messages,
-  manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
+- **User-facing text** exists in four languages (English, French, German,
+  Spanish): action messages, manifest texts, feature names, widget texts, and
+  `docs/en.md` / `fr.md` / `de.md` / `es.md`, kept in sync with the same
+  sections. `test/i18n.test.js` checks it.
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
   in English. Tests never touch the network.
 
@@ -233,3 +249,107 @@ long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store exige 
 - Docs `en`, `fr`, `de`, `es` avec les mêmes sections.
 - Chauffe, ouverture, sécurité : ne rien rendre pilotable « comme un thermostat » ou par un assistant
   vocal quand une erreur serait dangereuse (leçon d'OctoPrint).
+
+---
+
+# Intégration SyncThru
+
+État au 16/10/2026 : première version (`feat/initial`), **développée sans imprimante**. Vérifiée
+seulement par les tests, le lint et le validateur du store, sur les réponses réelles publiées par
+pysyncthru (M2070, C480FW) et Home Assistant (C430W).
+
+## Protocole
+
+- Deux GET sans authentification, ceux du mode API de pysyncthru (et donc de Home Assistant) :
+  `/sws/app/information/home/home.json` (état, identité, consommables, bacs) et
+  `/sws/app/information/counters/counters.json` (compteurs, absent sur beaucoup de modèles : `null`,
+  jamais une erreur). Les anciens modèles sans `home.json` (pages HTML seules, que pysyncthru gratte
+  en mode AUTO) ne sont **pas** pris en charge, comme dans Home Assistant (`ConnectionMode.API`).
+- **Ce « JSON » n'est pas du JSON** : un littéral d'objet JavaScript, clés sans guillemets, fins de
+  ligne CRLF, **sauts de ligne bruts dans les chaînes** (C480FW : `status1: "   Warming Up\n
+Please Wait..."`), virgules finales, espaces avant `:`. `JSON.parse` refuse tout ;
+  `src/syncthru/parse.js` lit ce dialecte (sans rien évaluer, sans prototype). Les fixtures gardent
+  les octets d'origine : `test/fixtures/syncthru/` est dans `.prettierignore`.
+- Champs (pysyncthru) : `status.hrDeviceStatus` (HOST-RESOURCES-MIB : 1 inconnu, 2 en marche,
+  3 avertissement, 4 test, 5 en panne), `status.status1..4` = lignes de l'afficheur ;
+  `toner_<couleur>`, `drum_<couleur>` et **`drum_color`** (unité d'imagerie couleur, ignorée par
+  pysyncthru, présente sur C430W et C480FW) : `opt` 0 = absent, `remaining` en %, `newError` = code
+  Samsung ; `tray1..5`, `mp`, `manual` : **seul `opt` 1 est un bac installé** (`opt` 2 apparaît sur
+  un bac absent), `capa` en feuilles, `paper_level` seulement si `GXI_SUPPORT_PAPER_LEVEL` vaut 1
+  (supposé en %, jamais vu à 1) ; `newError` `"0"` = pas d'erreur.
+- **Format du papier** : `paper_size1` est un code numérique non documenté (4 sur M2070 et C430W,
+  1 sur C480FW). Non affiché : un mauvais libellé serait pire. `scripts/probe.mjs` imprime le code
+  pour qu'un testeur le compare à son panneau.
+- **Identité** (`platformIdOf`, figé pour toujours) : numéro de série en minuscules alphanumériques,
+  sinon `mac-<12 hex>`, sinon `host-<adresse>`. Certains firmwares **masquent** série et MAC
+  (`xxxxxxxx`, C480FW) : l'appareil est alors lié à son adresse.
+
+## Choix de conception
+
+- **État** (`classifyState`) : bourrage > plus de papier > erreur (hr 5) > impression >
+  préchauffage > veille > (hr 3 : toner bas si un consommable est sous le seuil ou si tous les codes
+  sont `C…`, sinon avertissement) > occupée (hr 4) > prête (hr 2) > inconnu. Bourrage et papier
+  viennent du texte de l'afficheur (mots en/fr/de/es) **ou** des codes Samsung `M<n>-5…` (vide,
+  « M1-5112 Tray 1 paper empty ») et `M<n>-<autre>` (bourrage, « M1-1110 »), codes lus seulement
+  quand hr vaut 3 ou 5. Heuristique tirée de manuels de service, à confirmer sur matériel.
+  `printing` ne doit pas attraper « Printer » ni « Drucker » (`\bdruckt\b`).
+- **Fonctionnalités** : `state` text/text (libellé localisé), `online` presence-sensor/binary
+  (comme gladys-ping-wol : pastille verte/rouge, condition oui/non), toners et tambours
+  `level-sensor/liquid-level-percent` 0-100 (comme gladys-ipp), bacs text/text (« Prêt », « Vide »,
+  « Alerte <code> »), `tray_<n>_level`, compteurs `counter-sensor/integer` 0-1e9. Seul ce que
+  l'imprimante annonce à la découverte devient fonctionnalité. Tout est `read_only`.
+- **États publiés** : seulement ceux des fonctionnalités que l'appareil créé possède (le cœur jette
+  les autres) ; `publishChangedStates` avec un battement de 6 h. Imprimante muette : `state`
+  « Injoignable » et `online` 0, les niveaux gardent leur dernier relevé.
+- **Sondage** : minuteur du conteneur (`src/poller.js`, 60 s par défaut, réglable 30-3600 s,
+  réarmé en fin de cycle), `onPoll` en repli ignoré si l'imprimante a été lue il y a moins d'une
+  période. Compteurs toutes les 15 min (`COUNTERS_EVERY_MS`). Après 3 échecs, une redécouverte
+  (SSDP + liste + adresses connues) au plus toutes les 30 min retrouve une imprimante qui a changé
+  d'adresse DHCP ; republier met à jour les `params` (`SYNCTHRU_URL`) des appareils créés.
+- **Découverte** : `network_discovery` SSDP sur `urn:schemas-upnp-org:device:Printer:1` (le
+  `deviceType` que Home Assistant attend). Toute réponse est sondée en unicast sur `home.json` :
+  seules les vraies SyncThru deviennent des appareils (une HP ou une Brother qui répond au même
+  M-SEARCH est ignorée). Un scan refusé (cœur ancien, 403) écrit un avertissement, puis la liste
+  manuelle suffit.
+- **Déclencheurs** : `supply_low` (un toner ou un tambour atteint `low_threshold`, filtres
+  imprimante + type, variables nom, consommable, niveau) et `paper_problem` (filtres imprimante +
+  problème `jam`/`out_of_paper`, variables nom, problème en clair, texte de l'afficheur). Valeur
+  ajoutée sur l'état : un texte localisé ne se filtre pas proprement, et une seule carte couvre
+  toutes les cartouches. **Jamais à la première lecture** après un démarrage ; une imprimante
+  injoignable garde la mémoire des consommables bas (pas de faux franchissement à son retour) ;
+  injoignable dès le démarrage → mémoire inconnue, rien au retour.
+- **Widget `printer`** : titre + 5 jauges (toners d'abord, puis tambours) + liste `status` + bouton
+  `refresh` = 8 composants. Jauge liée à la fonctionnalité si l'appareil créé l'a, en ligne sinon.
+  Les consommables en trop deviennent des lignes ; la liste est coupée à 10 en gardant « Dernier
+  relevé ». Rendu sans requête (dernier relevé en mémoire). Couleurs : jamais `primary`.
+- **Adresses** : IP, nom d'hôte, URL http(s) avec port ; seule l'origine est gardée. **Une adresse
+  avec identifiants est refusée** et masquée (`//***@`) dans le journal : les pages lues n'en
+  demandent pas, et une telle adresse finirait dans les `params` de l'appareil. HTTPS accepté sans
+  vérifier le certificat auto-signé de l'imprimante (rien de secret n'est envoyé) ; deux
+  redirections au plus, même hôte seulement ; réponse plafonnée à 512 Ko et 10 s.
+- **Journaux** : info = démarrage, « Ready », découverte demandée, ajout d'un appareil, test,
+  configuration, bouton du widget ; une imprimante perdue = un `warn`, son retour = un `info`.
+  `test/app.test.js` vérifie qu'un cycle normal n'écrit rien en info et qu'un mot de passe tapé
+  dans une adresse n'apparaît nulle part.
+
+## Pièges rencontrés
+
+- `DEVICE_FEATURE_TYPES` du SDK n'a pas de groupe par capteur pour `presence-sensor` ni
+  `counter-sensor` : leurs types sont dans le groupe générique `SENSOR` (`TYPES.SENSOR.BINARY`,
+  `TYPES.SENSOR.INTEGER`). `TYPES.PRESENCE_SENSOR` vaut `undefined` et plante au démarrage.
+- L'ack d'une action ou d'un bouton de widget du faux Gladys renvoie le message sous
+  `data.message`, pas directement dans `data`.
+- `execFileSync` sur `scripts/probe.mjs` contre un faux serveur du même processus bloque la boucle
+  d'événements : le serveur ne répond jamais (utiliser `execFile` asynchrone).
+- Le libellé « Sie druckt nichts » (sujet = l'intégration) est refusé par le test de politesse
+  allemande : reformuler sans « Sie » en tête de phrase.
+- Onglets du cœur : « Discover » / « Découverte » / « Entdecken » / « Descubrir » ; déclencheur
+  natif « Device state change » / « Changement d'état de l'appareil » / « Änderung von
+  Gerätestatus » / « Cambio de estado del dispositivo » (`front/src/config/i18n`).
+
+## Questions ouvertes
+
+- Sens de `paper_size1` (format des bacs) et de `paper_level` : à relever sur une vraie imprimante
+  avec `scripts/probe.mjs <ip> --raw`.
+- Les modèles HP de l'ancienne gamme Samsung servent-ils encore `home.json` ?
+- Les codes `M<n>-5…` / `M<n>-…` correspondent-ils bien à « vide » / « bourrage » sur la gamme ?
